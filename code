@@ -1,0 +1,304 @@
+dataset_w = read.csv("European Bird Path for Solar position.csv")
+head(dataset_w)
+summary(dataset_w)
+dim(dataset_w)
+
+library(wmm)
+
+dataset_w$date <- as.Date(dataset_w$date)
+
+
+dataset_w$year = as.numeric(dataset_w$year)
+
+# Convert the date string to a POSIXlt object
+date_obj <- as.POSIXlt(dataset_w$date)
+
+# Extract the day of the year
+dataset_w$yearly_day <- date_obj$yday + 1
+
+
+dataset_w$yearly_date = dataset_w$yearly_day/365
+dataset_w$year = as.numeric(dataset_w$year)
+dataset_w$Annualized_time = (dataset_w$year + dataset_w$yearly_date)
+
+dataset_w$Annualized_time
+dataset_w$height = 0
+
+mag = list()
+for (i in 1:61920) {
+  mag[[i]] = data.frame(GetMagneticFieldWMM(lon = dataset_w$longitude[i], 
+                                            lat =  dataset_w$latitude[i], 
+                                            height =  dataset_w$height[i], 
+                                            time =  dataset_w$Annualized_time[i], 
+                                            wmmVersion = "WMM2010"))
+}
+
+mage_data = data.frame(t(sapply(mag,c)))
+head(mage_data)
+magnetic_dta = mage_data[,c(1:3, 7:10)]
+head(magnetic_dta)
+
+combined_final_eu_data = cbind(dataset_w, magnetic_dta)
+tail(combined_final_eu_data)
+
+install.packages("devtools")
+devtools::install_github("rmendels/xtractomatic")
+library(rerddapXtracto)
+require(tidyverse)
+library(xtractomatic)
+require(oce)
+require(lubridate)
+require(gganimate)
+library(rerddap)
+
+Eric = combined_final_eu_data[1:19795,]
+Nicco = combined_final_eu_data[19796:40916,]
+Sanne  = combined_final_eu_data[40917:61921,]
+
+library(suncalc)
+df1 = data.frame(date = Eric$date , lat = Eric$latitude , lon = Eric$longitude)
+df2 = data.frame(date = Sanne$date, lat = Sanne$latitude , lon = Sanne$longitude)
+df3 = data.frame(date = Nicco$date , lat = Nicco$latitude , lon = Nicco$longitude)
+Eric_m = suncalc::getMoonPosition(data = df1)
+Nicco_m = suncalc::getMoonPosition(data = df3)
+Sanne_m = suncalc::getMoonPosition(data = df2)
+
+Eric$moon_azimuth = Eric_m$azimuth
+Nicco$moon_azimuth = Nicco_m$azimuth
+Sanne$moon_azimuth = Sanne_m$azimuth
+
+head(Eric)
+
+library(circular)
+library(CircStats)
+
+Sanne = na.omit(Sanne)
+
+circ.cor(Sanne$direction, Sanne$moon_azimuth, T)
+
+summary(dataset_w)
+
+lon = c(-17,5)
+lat =  c(12,52)
+## set temporal extent
+time = c("2013-01-01", "2014-12-31")
+
+wind_x = xtracto_3D(dtype = "erdQAxwind1day", 
+                    xpos = lon, 
+                    ypos = lat, 
+                    tpos = time)
+
+wind_y = xtracto_3D(dtype = "erdQAxwind1day", 
+                    xpos = lon, 
+                    ypos = lat, 
+                    tpos = time)
+
+
+
+longitude = wind_x$longitude
+longitude
+latitude = wind_x$latitude
+latitude
+
+time = wind_x$time%>%as.Date()
+
+# eastward velocity (zonal)
+u = wind_x$data
+# northward velocity (meridional)
+v = wind_y$data
+
+head(wind_x$data)
+
+
+velocity = sqrt(u^2 + v^2)
+
+velocity
+
+imagep(longitude, 
+       latitude, 
+       velocity[,,1], 
+       filledContour = TRUE, 
+       xlab = "Longitude", 
+       ylab = "Latitude")
+
+
+
+
+
+Mig_b = Mig_B[580:594,]
+dim(Mig_b)
+
+for (i in 1:15) {
+  Mig_b$Moon_azimuth[i] = Mig_b$Moon_azimuth[i+1] - Mig_b$Moon_azimuth[i]
+}
+
+Mig_b$Moon_azimuth
+
+
+library(SpatialVx)
+library(cowplot)
+
+library(ggplot2)
+library(maps)
+
+dim(Eric)
+
+Mig_b1 = Eric[c(1,  1000, 2000: 3000, 4000,5000, 6000: 7000, 8000,9000:  10000,11000, 12000: 13000,
+               14000:15000, 16000),]
+Mig_b1
+
+Mig_b2 = Nicco[c(1,  1000, 2000: 3000, 4000,5000, 6000: 7000, 8000,9000:  10000,11000, 12000: 13000,
+                 14000:15000, 15500:16000),]
+Mig_b2
+
+Mig_b3 = Sanne[c(1,  1000, 2000: 3000, 4000,5000, 6000: 7000, 8000,9000:  10000,11000, 12000: 13000,
+                 14000:15000, 16000),]
+Mig_b3
+
+
+summary(Mig_b)
+
+world_coordinates = map_data("world")
+northern_map <- subset(world_coordinates, long >-20)
+northern_map1 <- subset(northern_map , long <20)
+northern_map2 <- subset(northern_map1 , lat >= 0)
+northern_map7 <- subset(northern_map2 , lat <= 70)
+
+library(ggOceanMaps)
+
+dt <- data.frame(lon = Sanne$longitude,
+                 lat = Sanne$latitude)
+
+
+plot <- 
+  basemap(data = dt, bathymetry = T, land.col = "green4") + 
+  geom_point(data = transform_coord(dt), aes(x = lon, y = lat), 
+             color = "orange", fill = NA, size = 1)+
+  geom_point(data = Mig_b3, aes(x = longitude, y = latitude), size = 2, 
+             color = "orange", shape = 19)+
+  geom_path(data = Mig_b3,
+            aes(x = Mig_b3$longitude, y = Mig_b3$latitude, 
+  #              xend = Mig_b1$longitude + sin(Mig_b1$direction * pi/180),
+   #             yend = Mig_b1$latitude + cos(Mig_b1$direction * pi/180),
+                color = "blue"),
+            arrow = arrow(length = unit(0.5, "cm"), type = "closed", ends = "last"),
+            size = 1 , col= "black") +
+  labs(title = "Sanne Bird Direction")+
+  theme(legend.position = "right")
+plot
+
+
+
+dim(Eric)
+dim(Nicco)
+dim(Sanne)
+
+
+combined_final_eu_data$i = as.numeric(combined_final_eu_data$i)
+combined_final_eu_data$d = as.numeric(combined_final_eu_data$d)
+
+for ( i in 1:19795) {
+  Eric$del_i[i] = 
+    (Eric$i[i+1] -  
+       Eric$i[i])
+}
+
+for ( i in 1:19795) {
+  Eric$del_d[i] = 
+    (Eric$d[i+1] -  
+       Eric$d[i])
+}
+
+
+for ( i in 1:21121) {
+  Nicco$del_i[i] = 
+    (Nicco$i[i+1] -  
+       Nicco$i[i])
+}
+
+for ( i in 1:21121) {
+  Nicco$del_d[i] = 
+    (Nicco$d[i+1] -  
+       Nicco$d[i])
+}
+
+
+for ( i in 1:21005) {
+  Sanne$del_i[i] = 
+    (Sanne$i[i+1] -  
+       Sanne$i[i])
+}
+
+for ( i in 1:21005) {
+  Sanne$del_d[i] = 
+    (Sanne$d[i+1] -  
+       Sanne$d[i])
+}
+
+library(circular)
+fit1 = lm.circular(Sanne$direction, Sanne$del_i)
+fit1$rho
+library(CircStats)
+Sanne= na.omit(Sanne)
+
+circ.cor(Eric$direction, Eric$del_i, T)
+tail(Eric)
+dim(Sanne)
+
+
+for (i in 1:19709) {
+  Eric$d_Moon_azimuth[i] = Eric$Moon_azimuth[i+1] - Eric$Moon_azimuth[i]
+}
+
+for (i in 1:19709) {
+  Eric$del_azimuth[i] = Eric$azimuth[i+1] - Eric$azimuth[i]
+}
+
+for (i in 1:19709) {
+  Eric$del_zenith[i] = Eric$zenith[i+1] - Eric$zenith[i]
+}
+
+
+##########################################################
+
+for (i in 1:21007) {
+  Nicco$d_Moon_azimuth[i] = Nicco$Moon_azimuth[i+1] - Nicco$Moon_azimuth[i]
+}
+
+for (i in 1:21007) {
+  Nicco$del_azimuth[i] = Nicco$azimuth[i+1] - Nicco$azimuth[i]
+}
+
+for (i in 1:21007) {
+  Nicco$del_zenith[i] = Nicco$zenith[i+1] - Nicco$zenith[i]
+}
+
+##########################################################
+
+for (i in 1:20758) {
+  Sanne$d_Moon_azimuth[i] = Sanne$Moon_azimuth[i+1] - Sanne$Moon_azimuth[i]
+}
+
+for (i in 1:20758) {
+  Sanne$del_azimuth[i] = Sanne$azimuth[i+1] - Sanne$azimuth[i]
+}
+
+for (i in 1:20758) {
+  Sanne$del_zenith[i] = Sanne$zenith[i+1] - Sanne$zenith[i]
+}
+
+
+watson.test(Eric$del_i, alpha = 0.01, dist = "vonmises")
+
+Combined_data = rbind(Eric, Sanne, Nicco)
+head(Combined_data)
+
+tail(Combined_data)
+Combined_data$x = as.numeric(Combined_data$x)
+Combined_data$y = as.numeric(Combined_data$y)
+Combined_data$z = as.numeric(Combined_data$z)
+Combined_data$h = as.numeric(Combined_data$h)
+Combined_data$f = as.numeric(Combined_data$f)
+
+
+write.csv(Combined_data, "EU_comb_data.csv")
